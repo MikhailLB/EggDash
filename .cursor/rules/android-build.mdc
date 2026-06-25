@@ -1,0 +1,48 @@
+---
+description: Правила сборки Android APK/AAB и работы с JKS для EggDash
+alwaysApply: true
+---
+
+# Android Build — EggDash
+
+Шпаргалка со всеми правилами хранится в `E:\white_artem.md`. Читай её перед любыми действиями со сборкой.
+
+## Обязательно уточняй у пользователя перед сборкой
+
+- Что собрать: **APK** или **AAB**?
+- Нужна ли **проверка подписи** после сборки?
+- Обновлялись ли **versionCode / versionName** в `pubspec.yaml`?
+
+## Ключевые константы проекта
+
+- `applicationId` = `com.eggdash.eggdashgame`
+- `namespace` = `com.eggdash.eggdashgame`
+- JKS: `android/app/eggdash.jks`, alias: `eggdash`
+- `key.properties` лежит в `android/` (не в `android/app/`)
+- `storeFile` в `key.properties` указывается **без** префикса `android/app/`
+
+## Команды сборки
+
+```powershell
+# AAB для Google Play
+flutter build appbundle --release
+
+# APK
+flutter build apk --release
+flutter build apk --split-per-abi --release
+```
+
+## После каждой сборки
+
+Проверять подпись через keytool:
+```powershell
+& "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe" -printcert -jarfile "build\app\outputs\bundle\release\app-release.aab"
+```
+SHA256 должен совпадать: `E0:3E:18:B3:...3B:4F:25`
+
+## Если меняется packageName
+
+1. `namespace` в `build.gradle.kts`
+2. `applicationId` в `build.gradle.kts`
+3. `package` в `MainActivity.kt`
+4. Перенести `MainActivity.kt` в папку, соответствующую новому пакету
