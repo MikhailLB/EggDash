@@ -92,8 +92,8 @@ class _AlertPromoStageState extends State<AlertPromoStage> {
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
     final bg = isLandscape
-        ? 'assets/Notifications/Horizontal_Notifications_Screen.png'
-        : 'assets/Notifications/Vertical_Notifications_Screen.png';
+        ? 'assets/Notifications/Horizontal_Notifications_Screen.webp'
+        : 'assets/Notifications/Vertical_Notifications_Screen.webp';
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFEFC4),

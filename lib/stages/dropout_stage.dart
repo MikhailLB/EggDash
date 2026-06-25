@@ -43,8 +43,8 @@ class _DropoutStageState extends State<DropoutStage> {
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
     final bgAsset = isLandscape
-        ? 'assets/Nowifi/Horizontal_Nowifi_Screen.png'
-        : 'assets/Nowifi/Vertical_Nowifi_Screen.png';
+        ? 'assets/Nowifi/Horizontal_Nowifi_Screen.webp'
+        : 'assets/Nowifi/Vertical_Nowifi_Screen.webp';
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFF6D9),
