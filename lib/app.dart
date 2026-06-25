@@ -1,8 +1,27 @@
 import 'package:flutter/material.dart';
-import 'screens/splash_screen.dart';
+
+import 'core/alert_center.dart';
+import 'core/attribution_tracker.dart';
+import 'core/data_vault.dart';
+import 'core/net_sensor.dart';
+import 'core/sync_gateway.dart';
+import 'stages/boot_stage.dart';
 
 class EggDashApp extends StatelessWidget {
-  const EggDashApp({super.key});
+  const EggDashApp({
+    super.key,
+    required this.vault,
+    required this.netSensor,
+    required this.tracker,
+    required this.gateway,
+    required this.alertCenter,
+  });
+
+  final DataVault vault;
+  final NetSensor netSensor;
+  final AttributionTracker tracker;
+  final SyncGateway gateway;
+  final AlertCenter alertCenter;
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +38,13 @@ class EggDashApp extends StatelessWidget {
           surface: Color(0xFF1B2347),
         ),
       ),
-      home: const SplashScreen(),
+      home: BootStage(
+        vault: vault,
+        netSensor: netSensor,
+        tracker: tracker,
+        gateway: gateway,
+        alertCenter: alertCenter,
+      ),
     );
   }
 }

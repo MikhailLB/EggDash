@@ -19,8 +19,12 @@ pluginManagement {
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    id("com.android.application") version "9.0.1" apply false
-    id("org.jetbrains.kotlin.android") version "2.3.20" apply false
+    // AGP 8.11.1 is the last release before the new-DSL migration in
+    // AGP 9.0. We stay on 8.x until Flutter's Gradle plugin and the
+    // FirebaseGoogleServices plugin support the built-in Kotlin path.
+    id("com.android.application") version "8.11.1" apply false
+    id("org.jetbrains.kotlin.android") version "2.2.20" apply false
+    id("com.google.gms.google-services") version "4.4.2" apply false
 }
 
 include(":app")

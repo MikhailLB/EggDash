@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "392256180637",
+    "project_id": "eggdash-2d79c",
+    "storage_bucket": "eggdash-2d79c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:392256180637:android:a84a68c9202a82de235f74",
+        "android_client_info": {
+          "package_name": "com.eggdash.eggdashgame"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDZg3TIHFaoRF9R8tYoZ6qtFcP4c_8yOLc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

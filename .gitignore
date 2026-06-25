@@ -31,6 +31,8 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+/android/build/
+/android/app/build/
 /coverage/
 
 # Symbolication related
@@ -43,3 +45,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Keystore + signing secrets — NEVER commit.
+# (google-services.json IS committed by project policy.)
+/android/key.properties
+/android/app/*.jks
+/android/app/*.keystore
+# Obfuscation symbol map produced by --split-debug-info.
+/build/debug_info/

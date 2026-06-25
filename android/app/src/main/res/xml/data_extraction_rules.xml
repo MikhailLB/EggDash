@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  No automatic cloud-backup or device-transfer of the gray-side
+  storage. Both DataVault (SharedPreferences) and FlutterSecureStorage
+  (KeyStore-backed) live under sharedpref/database; restoring them on
+  a different device could leak the user's attribution.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="file" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="file" path="." />
+    </device-transfer>
+</data-extraction-rules>

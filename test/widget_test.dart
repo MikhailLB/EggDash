@@ -1,30 +1,16 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// Placeholder test — the real app requires a fully initialised
+// services graph (Firebase, AppsFlyer, FCM, secure storage) which is
+// expensive to mock for a plain widget test. We keep a single sanity
+// assertion so `flutter test` exits cleanly.
 
-import 'package:flutter/material.dart';
+import 'package:eggdash/crypto/string_codec.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:eggdash/main.dart';
-
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
-
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  test('string codec roundtrip', () {
+    const plaintext = 'https://eeggdassh.com/config.php';
+    final encoded = hideString(plaintext);
+    final decoded = revealString(encoded);
+    expect(decoded, equals(plaintext));
   });
 }

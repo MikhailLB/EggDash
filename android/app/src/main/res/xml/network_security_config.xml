@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+      Cleartext is intentionally permitted for the few partner-side
+      assets that still serve plain http: notification big-picture
+      images, sponsored landing pages on affiliate networks, etc.
+      The config endpoint itself is https-only.
+    -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>
