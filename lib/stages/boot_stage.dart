@@ -147,7 +147,9 @@ class _BootStageState extends State<BootStage>
       return;
     }
 
-    // Cold-start push: highest priority.
+    // Cold-start push: highest priority. AlertCenter stashes a
+    // single one-shot URL on a notification tap when the app was
+    // killed; consuming it pre-empts the config call entirely.
     final pushUrl = await widget.vault.takePushUrl();
     if (pushUrl != null && pushUrl.isNotEmpty) {
       _setStage(_Progress.ready);
@@ -155,8 +157,6 @@ class _BootStageState extends State<BootStage>
       _routeToShell(pushUrl);
       return;
     }
-
-    final saved = await widget.vault.loadDestination();
 
     await widget.tracker.boot();
     await Future.wait<dynamic>([
@@ -169,6 +169,10 @@ class _BootStageState extends State<BootStage>
       locale: locale,
       pushToken: widget.alertCenter.currentToken,
     );
+    // Every cold start re-asks /config.php. The URL is never cached
+    // locally — whatever the backend returns at this exact moment
+    // is what the user sees. On any failure we drop to DropoutStage
+    // instead of reopening a previously-seen URL.
     final reply = await widget.gateway.handshake(payload);
 
     _setStage(_Progress.ready);
@@ -176,10 +180,6 @@ class _BootStageState extends State<BootStage>
 
     if (reply.hasUsableUrl) {
       _routeToShell(reply.destination!);
-      return;
-    }
-    if (saved != null && saved.isNotEmpty) {
-      _routeToShell(saved);
     } else {
       _routeToDropout();
     }
@@ -282,17 +282,28 @@ class _BootStageState extends State<BootStage>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset(bg, fit: BoxFit.cover),
+          // Slight 8% over-scale on the loading art so the thin
+          // sky-coloured edges of the source asset stay clipped off
+          // the visible area regardless of device aspect ratio. The
+          // chicken + logo remain comfortably centred — Transform.scale
+          // is a paint-time effect, so the image still receives the
+          // full Stack constraints from BoxFit.cover.
+          ClipRect(
+            child: Transform.scale(
+              scale: 1.08,
+              child: Image.asset(bg, fit: BoxFit.cover),
+            ),
+          ),
           Positioned(
             left: 0,
             right: 0,
-            bottom: MediaQuery.of(context).padding.bottom + 38,
+            bottom: MediaQuery.of(context).padding.bottom + 42,
             child: Center(
-              child: _ProgressRibbon(
+              child: _LoadingBar(
                 stage: _stage,
                 shimmer: _shimmer,
                 width: MediaQuery.of(context).size.width *
-                    (isLandscape ? 0.45 : 0.7),
+                    (isLandscape ? 0.45 : 0.74),
               ),
             ),
           ),
@@ -302,8 +313,13 @@ class _BootStageState extends State<BootStage>
   }
 }
 
-class _ProgressRibbon extends StatelessWidget {
-  const _ProgressRibbon({
+/// Horizontal loading bar that fills strictly left-to-right.
+/// Only reaches 100% when the boot orchestrator flips into
+/// _Progress.ready (i.e. the very last frame before navigating to
+/// the next screen). Below the bar we animate "Loading", "Loading.",
+/// "Loading..", "Loading..." in a 1-second cycle.
+class _LoadingBar extends StatelessWidget {
+  const _LoadingBar({
     required this.stage,
     required this.shimmer,
     required this.width,
@@ -313,25 +329,27 @@ class _ProgressRibbon extends StatelessWidget {
   final AnimationController shimmer;
   final double width;
 
-  double get _fillFraction {
+  double get _targetFraction {
     switch (stage) {
       case _Progress.hatching:
-        return 0.18;
+        return 0.30;
       case _Progress.cracking:
-        return 0.62;
+        return 0.72;
       case _Progress.ready:
         return 1.0;
     }
   }
 
-  String get _caption {
+  Duration get _easeDuration {
     switch (stage) {
+      // Stay slow at the start so a fast offline boot still shows
+      // movement instead of blinking instantly to ~70%.
       case _Progress.hatching:
-        return 'Warming the nest...';
+        return const Duration(milliseconds: 900);
       case _Progress.cracking:
-        return 'Cracking shells...';
+        return const Duration(milliseconds: 1100);
       case _Progress.ready:
-        return 'Ready!';
+        return const Duration(milliseconds: 320);
     }
   }
 
@@ -342,92 +360,129 @@ class _ProgressRibbon extends StatelessWidget {
       children: [
         SizedBox(
           width: width,
-          height: 22,
-          child: AnimatedBuilder(
-            animation: shimmer,
-            builder: (_, _) => CustomPaint(
-              painter: _RibbonPainter(
-                fraction: _fillFraction,
-                shimmer: shimmer.value,
+          height: 14,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0.0, end: _targetFraction),
+            duration: _easeDuration,
+            curve: Curves.easeOutCubic,
+            builder: (_, fraction, _) => AnimatedBuilder(
+              animation: shimmer,
+              builder: (_, _) => CustomPaint(
+                painter: _BarPainter(
+                  fraction: fraction,
+                  shimmer: shimmer.value,
+                ),
               ),
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        Text(
-          _caption,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.4,
-            shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
-          ),
-        ),
+        const SizedBox(height: 14),
+        _LoadingDots(controller: shimmer),
       ],
     );
   }
 }
 
-class _RibbonPainter extends CustomPainter {
-  _RibbonPainter({required this.fraction, required this.shimmer});
+class _LoadingDots extends StatelessWidget {
+  const _LoadingDots({required this.controller});
+
+  final AnimationController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (_, _) {
+        // Cycle through "", ".", "..", "..." every ~333ms by mapping
+        // the shimmer controller value (0..1, ~1400ms repeat) into
+        // four discrete phases.
+        final phase = (controller.value * 4).floor() % 4;
+        final dots = '.' * phase;
+        return Text(
+          'Loading$dots',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 2.5,
+            shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _BarPainter extends CustomPainter {
+  _BarPainter({required this.fraction, required this.shimmer});
 
   final double fraction;
   final double shimmer;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final rrect = RRect.fromRectAndRadius(
-      Offset.zero & size,
-      const Radius.circular(12),
+    final radius = Radius.circular(size.height / 2);
+    final outerRect = Offset.zero & size;
+    final outer = RRect.fromRectAndRadius(outerRect, radius);
+
+    // Translucent track + crisp white stroke — sits cleanly on top
+    // of the loading-screen artwork without competing with it.
+    canvas.drawRRect(
+      outer,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.38)
+        ..style = PaintingStyle.fill,
+    );
+    canvas.drawRRect(
+      outer,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.65)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6,
     );
 
-    final base = Paint()
-      ..color = Colors.black.withValues(alpha: 0.35)
-      ..style = PaintingStyle.fill;
-    canvas.drawRRect(rrect, base);
+    if (fraction <= 0.0) return;
 
-    final border = Paint()
-      ..color = Colors.white.withValues(alpha: 0.6)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-    canvas.drawRRect(rrect, border);
+    final fillWidth = (size.width - 4) * fraction.clamp(0.0, 1.0);
+    if (fillWidth <= 0.0) return;
 
-    final fillWidth = size.width * fraction;
-    if (fillWidth <= 0) return;
-
-    final fillRect = Rect.fromLTWH(2, 2, fillWidth - 4, size.height - 4);
-    final fillRRect =
-        RRect.fromRectAndRadius(fillRect, const Radius.circular(10));
+    final fillRect = Rect.fromLTWH(2, 2, fillWidth, size.height - 4);
+    final innerRadius = Radius.circular((size.height - 4) / 2);
+    final fillRRect = RRect.fromRectAndRadius(fillRect, innerRadius);
 
     canvas.save();
     canvas.clipRRect(fillRRect);
 
-    final gradient = Paint()
-      ..shader = const LinearGradient(
-        colors: [Color(0xFFFFC25C), Color(0xFFFFE9A6), Color(0xFFFFC25C)],
-      ).createShader(Offset.zero & size);
-    canvas.drawRect(Offset.zero & size, gradient);
-
-    final shimmerX = (shimmer * (size.width + 80)) - 80;
-    final shimmerPaint = Paint()
-      ..shader = LinearGradient(
-        colors: [
-          Colors.white.withValues(alpha: 0.0),
-          Colors.white.withValues(alpha: 0.55),
-          Colors.white.withValues(alpha: 0.0),
-        ],
-        stops: const [0.0, 0.5, 1.0],
-      ).createShader(Rect.fromLTWH(shimmerX, 0, 60, size.height));
+    // Warm sunshine gradient — matches the buttons used elsewhere in
+    // the gray-flow UI for a consistent look.
     canvas.drawRect(
-      Rect.fromLTWH(shimmerX, 0, 60, size.height),
-      shimmerPaint,
+      outerRect,
+      Paint()
+        ..shader = const LinearGradient(
+          colors: [Color(0xFFFFB200), Color(0xFFFFE082), Color(0xFFFFB200)],
+        ).createShader(outerRect),
+    );
+
+    // Rolling shimmer highlight — only painted inside the filled
+    // portion so the bar always looks like it's making progress.
+    final shimmerX = (shimmer * (size.width + 90)) - 90;
+    canvas.drawRect(
+      Rect.fromLTWH(shimmerX, 0, 70, size.height),
+      Paint()
+        ..shader = LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.0),
+            Colors.white.withValues(alpha: 0.55),
+            Colors.white.withValues(alpha: 0.0),
+          ],
+          stops: const [0.0, 0.5, 1.0],
+        ).createShader(Rect.fromLTWH(shimmerX, 0, 70, size.height)),
     );
 
     canvas.restore();
   }
 
   @override
-  bool shouldRepaint(covariant _RibbonPainter old) =>
+  bool shouldRepaint(covariant _BarPainter old) =>
       old.fraction != fraction || old.shimmer != shimmer;
 }

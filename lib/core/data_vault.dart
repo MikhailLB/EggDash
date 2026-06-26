@@ -7,9 +7,14 @@ import '../types/shell_mode.dart';
 // ============================================================
 // Coexists with the game's StorageService (which uses `ed_*`
 // keys) without colliding — every key in this class is prefixed
-// with `gw_*` (gray-wave). The few values that are genuinely
-// sensitive (saved URL, one-shot push URL) live in secure
-// storage instead of SharedPreferences.
+// with `gw_*` (gray-wave). The only genuinely sensitive value
+// (the one-shot push URL) lives in secure storage instead of
+// SharedPreferences.
+//
+// NOT cached anywhere: the /config.php destination URL. Each
+// cold start re-asks the backend; we never write the URL into
+// the vault. Earlier builds did — we purge that legacy key on
+// bootstrap() so upgrading users don't drift onto a stale URL.
 //
 // The `notification_os_denied` flag is critical: once Android
 // 13+ refuses the POST_NOTIFICATIONS dialog, the OS will never
@@ -23,14 +28,14 @@ class DataVault {
   static final DataVault instance = DataVault._();
 
   static const _keyShellMode = 'gw_shell_mode';
-  static const _keyExpiresAt = 'gw_expires_at';
   static const _keyNotifGrant = 'gw_notif_granted';
   static const _keyNotifOsDeny = 'gw_notif_os_blocked';
   static const _keyNotifCooldown = 'gw_notif_cooldown';
-  static const _keyLastSyncTs = 'gw_last_sync_ts';
 
-  // Secure-storage keys — keep them opaque.
-  static const _vaultDestination = 'gw_v_dest';
+  // Secure-storage keys.
+  // _vaultLegacyDestination existed in earlier builds — see comment
+  // in bootstrap() for the migration rationale.
+  static const _vaultLegacyDestination = 'gw_v_dest';
   static const _vaultPushOneShot = 'gw_v_push';
 
   late SharedPreferences _prefs;
@@ -38,6 +43,15 @@ class DataVault {
 
   Future<void> bootstrap() async {
     _prefs = await SharedPreferences.getInstance();
+    // Drop any URL that older builds left cached so the new
+    // re-ask-on-every-launch contract is honoured even after an
+    // app upgrade. Failure to delete is silently ignored — secure
+    // storage occasionally throws on first read after install.
+    try {
+      await _safe.delete(key: _vaultLegacyDestination);
+      await _prefs.remove('gw_expires_at');
+      await _prefs.remove('gw_last_sync_ts');
+    } catch (_) {}
   }
 
   // ---- Shell mode --------------------------------------------------------
@@ -48,29 +62,6 @@ class DataVault {
 
   Future<void> writeShellMode(ShellMode mode) =>
       _prefs.setString(_keyShellMode, mode.toStorageValue());
-
-  // ---- Saved destination URL --------------------------------------------
-
-  Future<String?> loadDestination() => _safe.read(key: _vaultDestination);
-
-  Future<void> saveDestination(String url) =>
-      _safe.write(key: _vaultDestination, value: url);
-
-  Future<void> clearDestination() => _safe.delete(key: _vaultDestination);
-
-  // ---- URL expiry --------------------------------------------------------
-
-  int? readExpiresAt() => _prefs.getInt(_keyExpiresAt);
-
-  Future<void> writeExpiresAt(int unixSeconds) =>
-      _prefs.setInt(_keyExpiresAt, unixSeconds);
-
-  bool hasExpired() {
-    final at = readExpiresAt();
-    if (at == null) return true;
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    return now >= at;
-  }
 
   // ---- Notification flags ------------------------------------------------
 
@@ -117,12 +108,5 @@ class DataVault {
     final v = await _safe.read(key: _vaultPushOneShot);
     if (v != null) await _safe.delete(key: _vaultPushOneShot);
     return v;
-  }
-
-  // ---- Misc --------------------------------------------------------------
-
-  Future<void> stampLastSync() async {
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    await _prefs.setInt(_keyLastSyncTs, now);
   }
 }

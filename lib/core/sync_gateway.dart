@@ -13,21 +13,32 @@ import 'transport_pipe.dart';
 // Receives a fully-merged attribution body, sends it as JSON to
 // the backend, and returns a parsed SyncResponse.
 //
-//   • Success + `ok=true` + `url`     → save url/expires to vault,
-//                                       caller flips ShellMode.online.
-//   • Success + `ok=false`            → caller flips ShellMode.offline
-//                                       (this decision is sticky).
-//   • Any error / timeout (>15 s)     → return failure; caller may
-//                                       fall back to a previously
-//                                       saved url if one exists.
-//   • Endpoint not configured         → fail fast — empty URL is
-//                                       indistinguishable from a
-//                                       deliberately disabled build.
+//   • Success + `ok=true` + `url`  → caller flips ShellMode.online
+//                                    and routes to that fresh URL.
+//                                    URL is NEVER cached — every
+//                                    launch re-asks config.
+//   • Success + `ok=false`         → caller flips ShellMode.offline
+//                                    (this decision is sticky).
+//   • Any error / timeout (>15 s)  → return failure; caller routes
+//                                    the user to DropoutStage.
+//   • Endpoint not configured      → fail fast — empty URL is
+//                                    indistinguishable from a
+//                                    deliberately disabled build.
+//
+// NO URL CACHE: by design we do not persist `url` / `expires`.
+// Each cold start hits the config endpoint and uses whatever URL
+// the backend serves at that moment. The only persisted launch-
+// time URL is the one-shot push URL stashed by AlertCenter on a
+// cold-start notification tap.
 // ============================================================
 
 class SyncGateway {
   SyncGateway(this._vault);
 
+  // Kept as a constructor argument for API symmetry — the gateway
+  // has nothing to write right now, but downstream wiring depends
+  // on the same handshake() / constructor contract.
+  // ignore: unused_field
   final DataVault _vault;
 
   Future<SyncResponse> handshake(Map<String, dynamic> payload) async {
@@ -58,15 +69,7 @@ class SyncGateway {
         return SyncResponse.failure('malformed_response');
       }
 
-      final parsed = SyncResponse.fromJson(decoded);
-      if (parsed.hasUsableUrl) {
-        await _vault.saveDestination(parsed.destination!);
-        if (parsed.expiresAtUnix != null) {
-          await _vault.writeExpiresAt(parsed.expiresAtUnix!);
-        }
-        await _vault.stampLastSync();
-      }
-      return parsed;
+      return SyncResponse.fromJson(decoded);
     } catch (e) {
       if (kDebugMode) debugPrint('[SyncGateway] exception: $e');
       return SyncResponse.failure(e.toString());

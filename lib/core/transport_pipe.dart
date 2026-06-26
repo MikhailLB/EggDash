@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:http/http.dart' as http;
-import '../setup/core_settings.dart';
 import '../setup/transport_secrets.dart';
 
 // ============================================================
@@ -12,13 +11,14 @@ import '../setup/transport_secrets.dart';
 // so it advertises a believable mobile browser User-Agent.
 //
 // The UA is built once from real device information (brand,
-// model, build id, SDK level) and then cached. We also append a
-// per-app identity suffix `appid/<bundle> appname/<name>` after
-// the standard browser UA — backend analytics relies on this to
-// route requests inside the affiliate network.
+// model, build id, SDK level) and then cached. Chrome / WebKit
+// version fragments live inside transport_secrets as XOR bytes
+// so they are not greppable in the binary.
 //
-// Chrome / WebKit version fragments live inside transport_secrets
-// as XOR bytes so they are not greppable in the binary.
+// The UA stays a plain mobile-browser string — no `appid` or
+// `appname` suffix is appended. Anything that needs the app
+// identity for the backend should send it explicitly in the
+// request body / headers.
 // ============================================================
 
 class TransportPipe extends http.BaseClient {
@@ -44,8 +44,6 @@ class TransportPipe extends http.BaseClient {
   Future<String> _composeUserAgent() async {
     final chrome = _firstNotEmpty(decodeChromeVersion(), '132.0.6834.163');
     final webkit = _firstNotEmpty(decodeWebkitVersion(), '537.36');
-    final identity =
-        'appid/${CoreSettings.bundleIdentifier} appname/${CoreSettings.appNameToken}';
 
     try {
       final info = DeviceInfoPlugin();
@@ -57,14 +55,13 @@ class TransportPipe extends http.BaseClient {
         final build = droid.display.isNotEmpty ? droid.display : droid.id;
         return 'Mozilla/5.0 (Linux; Android $sdk; $brand $model '
             'Build/$build) AppleWebKit/$webkit (KHTML, like Gecko) '
-            'Chrome/$chrome Mobile Safari/$webkit $identity';
+            'Chrome/$chrome Mobile Safari/$webkit';
       } else if (Platform.isIOS) {
         final ios = await info.iosInfo;
         final formatted = ios.systemVersion.replaceAll('.', '_');
         return 'Mozilla/5.0 (iPhone; CPU iPhone OS $formatted like Mac OS X) '
             'AppleWebKit/$webkit (KHTML, like Gecko) '
-            'Version/${ios.systemVersion} Mobile/15E148 Safari/$webkit '
-            '$identity';
+            'Version/${ios.systemVersion} Mobile/15E148 Safari/$webkit';
       }
     } catch (_) {
       // fall through to a safe fallback below
@@ -73,11 +70,11 @@ class TransportPipe extends http.BaseClient {
     if (Platform.isAndroid) {
       return 'Mozilla/5.0 (Linux; Android 15; SM-S931U '
           'Build/AP3A.240905.015.A2) AppleWebKit/$webkit (KHTML, like Gecko) '
-          'Chrome/$chrome Mobile Safari/$webkit $identity';
+          'Chrome/$chrome Mobile Safari/$webkit';
     }
     return 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) '
         'AppleWebKit/$webkit (KHTML, like Gecko) '
-        'Version/17.5 Mobile/15E148 Safari/$webkit $identity';
+        'Version/17.5 Mobile/15E148 Safari/$webkit';
   }
 
   @override

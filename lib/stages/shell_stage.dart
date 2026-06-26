@@ -410,6 +410,23 @@ class _ShellStageState extends State<ShellStage>
     final orientation = MediaQuery.of(context).orientation;
     final viewPadding = MediaQuery.of(context).viewPadding;
 
+    // In landscape the OS reports the display cutout (camera punch
+    // hole / iPhone notch / curved bezel) on the leading edge as
+    // `viewPadding.left` / `.right`. We keep top/bottom at zero so
+    // the WebView remains immersive, but we MUST reserve those side
+    // gutters or the affiliate site renders behind the cutout and
+    // its top-left logo / nav becomes unreadable.
+    //
+    // In portrait the cutout sits at the top edge — we keep the
+    // existing top inset and let the WebView span edge-to-edge
+    // horizontally.
+    final webPadding = orientation == Orientation.landscape
+        ? EdgeInsets.only(
+            left: viewPadding.left,
+            right: viewPadding.right,
+          )
+        : EdgeInsets.only(top: viewPadding.top);
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
@@ -422,11 +439,7 @@ class _ShellStageState extends State<ShellStage>
           fit: StackFit.expand,
           children: [
             Padding(
-              padding: EdgeInsets.only(
-                top: orientation == Orientation.landscape
-                    ? 0
-                    : viewPadding.top,
-              ),
+              padding: webPadding,
               child: WebViewWidget(controller: _controller),
             ),
             if (_spinning)
